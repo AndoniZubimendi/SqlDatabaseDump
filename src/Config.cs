@@ -11,4 +11,5 @@ internal sealed record class Config(
 	bool ReplaceExistingFiles,
 	bool SkipErrors,
 	bool ExtendedProperties,
-	bool WithDependencies);
+	bool WithDependencies,
+	List<string> ReferenceTables);

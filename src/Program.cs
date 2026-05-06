@@ -40,7 +40,7 @@ internal static class Program
 
 		using var cancellationToken = new CancellationTokenSource();
 		var types = Enum.GetValues<Scriptable>();
-
+		
 		if (config.SingleThread || config.MaxParallel == 1) {
 			// run in sequence
 			SequentialProcess(types, config, cancellationToken);
@@ -53,12 +53,15 @@ internal static class Program
 			WriteAnyErrors(config);
 		}
 
+		ReferenceTableDumper.Dump(config);
+
 		stopwatch.Stop();
 		var seconds = Convert.ToDouble(stopwatch.ElapsedMilliseconds) / 1000.0;
 
 		Console.WriteLine(
 			$"Items found: {Shared.MaxCounter.Value}, files written: {Shared.WrittenCounter.Value}, errors: {Shared.ErrorObjects.Count}, remaining: {Shared.QueueCounter.Value}");
 		Console.WriteLine($"Execution Time: {seconds:f1} secs");
+		
 	}
 
 	private static void SequentialProcess(IEnumerable<Scriptable> types, Config config,
@@ -162,8 +165,11 @@ internal static class Program
 
 		dir = DumpDb.EnsurePathExists(dir);
 
+		List<string> referenceTables = []; //pico.GetValues<string>("-t", "--reference-tables");
 		return new Config(instance, login, password, database, dir, maxParallel,
-			singleThread, replace, skipErrors, extendedProperties || allExtras, withDependencies || allExtras);
+			singleThread, replace, skipErrors, extendedProperties || allExtras, withDependencies || allExtras,
+			referenceTables
+		);
 	}
 
 	private static void WriteAnyErrors(Config config)
