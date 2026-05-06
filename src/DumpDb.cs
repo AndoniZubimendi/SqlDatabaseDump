@@ -1,5 +1,6 @@
-﻿namespace SqlDatabaseDump;
+namespace SqlDatabaseDump;
 
+using Microsoft.SqlServer.Management.Common;
 using Microsoft.SqlServer.Management.Smo;
 
 internal sealed class DumpDb(Config config, Scriptable scriptType, CancellationTokenSource cancellationToken)
@@ -11,9 +12,17 @@ internal sealed class DumpDb(Config config, Scriptable scriptType, CancellationT
 	public void Run()
 	{
 		var theServer = new Server(config.InstanceName);
+
+		theServer.ConnectionContext.LoginSecure = false; // False = SQL Authentication
+		theServer.ConnectionContext.Login = config.Login;
+		theServer.ConnectionContext.Password = config.Password;
+
+		theServer.ConnectionContext.Connect();
+
 		myDB = theServer.Databases[config.DatabaseName];
 		if (myDB == null) {
-			throw new InvalidOperationException($"Database '{config.DatabaseName}' not found on '{config.InstanceName}'");
+			throw new InvalidOperationException(
+				$"Database '{config.DatabaseName}' not found on '{config.InstanceName}'");
 		}
 
 		theServer.SetDefaultInitFields(true);
@@ -62,7 +71,8 @@ internal sealed class DumpDb(Config config, Scriptable scriptType, CancellationT
 				throw new InvalidOperationException($"Invalid type: {scriptType}");
 		}
 
-		ThreadsafeWrite.Write($"-- Queue contains {Shared.QueueCounter.Value} item(s) out of {Shared.MaxCounter.Value} --");
+		ThreadsafeWrite.Write(
+			$"-- Queue contains {Shared.QueueCounter.Value} item(s) out of {Shared.MaxCounter.Value} --");
 
 		foreach (var o in list.Items) {
 			try {
@@ -85,15 +95,32 @@ internal sealed class DumpDb(Config config, Scriptable scriptType, CancellationT
 	{
 		cancellationToken.Token.ThrowIfCancellationRequested();
 
-		ThreadsafeWrite.Write($"Scripting {wrappedObject.FullName} ({Shared.QueueCounter.Value} of {Shared.MaxCounter.Value} remaining)");
+		ThreadsafeWrite.Write(
+			$"Scripting {wrappedObject.FullName} ({Shared.QueueCounter.Value} of {Shared.MaxCounter.Value} remaining)"
+		);
 
-		var filename = $"{config.OutputDirectory}{wrappedObject.FullName}";
+		var wrappedObjectFullName = wrappedObject.FullName;
+
+		var filename = $"{config.OutputDirectory}{wrappedObjectFullName}";
+
+		Console.WriteLine($"Writing {filename}");
 
 		try {
 			if (!config.ReplaceExistingFiles && File.Exists(filename)) {
 				// signal to any other tasks to cancel, and throw
 				cancellationToken.Cancel();
 				throw new FileExistsException($"File already exists: {filename}", filename);
+			}
+
+
+			var wrappedObjectDirName = wrappedObject.DirName;
+			var dirname = $"{config.OutputDirectory}{wrappedObjectDirName}";
+
+			if (!Directory.Exists(dirname)) {
+				ThreadsafeWrite.Write(
+					$"Creating directory {dirname}"
+				);
+				Directory.CreateDirectory(dirname);
 			}
 
 			var lines = wrappedObject.Script(); // this will throw if access is denied
@@ -113,7 +140,7 @@ internal sealed class DumpDb(Config config, Scriptable scriptType, CancellationT
 			}
 
 			writer.Close();
-			_ = Shared.WrittenCounter.Increment();  // file has been written
+			_ = Shared.WrittenCounter.Increment(); // file has been written
 		}
 		finally {
 			// one less in queue
@@ -132,14 +159,14 @@ internal sealed class DumpDb(Config config, Scriptable scriptType, CancellationT
 	/// </summary>
 	public static string EnsurePathExists(string path)
 	{
-		if (!path.EndsWith('\\')) {
-			path += "\\";
+		if (!path.EndsWith('/')) {
+			path += "/";
 		}
 
 		var directoryPath = Path.GetDirectoryName(path)
-			?? throw new InvalidOperationException($"Could not determine directory path for '{path}'");
+		                    ?? throw new InvalidOperationException($"Could not determine directory path for '{path}'");
 
 		_ = Directory.CreateDirectory(directoryPath);
-		return directoryPath + "\\";
+		return directoryPath + "/";
 	}
 }

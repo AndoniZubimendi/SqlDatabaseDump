@@ -15,13 +15,14 @@ internal sealed class DbObjectList(CancellationTokenSource cancellationToken)
 	/// <summary>
 	/// Add a scriptable object to the list
 	/// </summary>
-	private void Add(IScriptable script, string? schema, string name, string extension, ScriptingOptions? options = null) =>
+	private void Add(IScriptable script, string? schema, string name, string extension,
+		ScriptingOptions? options = null) =>
 		items.Add(new ScriptableObject(script, schema, name, extension, options ?? Shared.ScriptOptionsNormal));
 
 	private static void UpdateCounters()
 	{
-		_ = Shared.QueueCounter.Increment();    // current items in queue, this goes up and down
-		_ = Shared.MaxCounter.Increment();     // max items in queue, this only goes up
+		_ = Shared.QueueCounter.Increment(); // current items in queue, this goes up and down
+		_ = Shared.MaxCounter.Increment(); // max items in queue, this only goes up
 	}
 
 	public void AddDatabase(Database db, string databaseName)
@@ -38,7 +39,7 @@ internal sealed class DbObjectList(CancellationTokenSource cancellationToken)
 			if (!tab.IsSystemObject) {
 				UpdateCounters();
 				ThreadsafeWrite.Write($"Enumerating table {tab.Name}");
-				Add(tab, tab.Schema, tab.Name, "TAB", Shared.ScriptOptionsFull);
+				Add(tab, tab.Schema, ObjectType.Table, ObjectType.Table, Shared.ScriptOptionsFull);
 			}
 		}
 	}
@@ -51,7 +52,7 @@ internal sealed class DbObjectList(CancellationTokenSource cancellationToken)
 			if (!v.IsSystemObject) {
 				UpdateCounters();
 				ThreadsafeWrite.Write($"Enumerating view {v.Name}");
-				Add(v, v.Schema, v.Name, "VIW", Shared.ScriptOptionsFull);
+				Add(v, v.Schema, v.Name, ObjectType.View, Shared.ScriptOptionsFull);
 			}
 		}
 	}
@@ -64,7 +65,7 @@ internal sealed class DbObjectList(CancellationTokenSource cancellationToken)
 			if (!p.IsSystemObject) {
 				UpdateCounters();
 				ThreadsafeWrite.Write($"Enumerating sproc {p.Name}");
-				Add(p, p.Schema, p.Name, "PRC");
+				Add(p, p.Schema, p.Name, ObjectType.StoredProcedure);
 			}
 		}
 	}
@@ -77,7 +78,7 @@ internal sealed class DbObjectList(CancellationTokenSource cancellationToken)
 			if (!u.IsSystemObject) {
 				UpdateCounters();
 				ThreadsafeWrite.Write($"Enumerating UDF {u.Name}");
-				Add(u, u.Schema, u.Name, "UDF");
+				Add(u, u.Schema, u.Name, ObjectType.Function);
 			}
 		}
 	}
@@ -90,7 +91,7 @@ internal sealed class DbObjectList(CancellationTokenSource cancellationToken)
 			if (!r.IsFixedRole) {
 				UpdateCounters();
 				ThreadsafeWrite.Write($"Enumerating role {r.Name}");
-				Add(r, null, r.Name, "ROLE", Shared.ScriptOptionsMinimal);
+				Add(r, null, r.Name, ObjectType.Role, Shared.ScriptOptionsMinimal);
 			}
 		}
 	}
@@ -102,7 +103,7 @@ internal sealed class DbObjectList(CancellationTokenSource cancellationToken)
 
 			UpdateCounters();
 			ThreadsafeWrite.Write($"Enumerating rule {r.Name}");
-			Add(r, r.Schema, r.Name, "RULE");
+			Add(r, r.Schema, r.Name, ObjectType.Rule);
 		}
 	}
 
@@ -114,7 +115,7 @@ internal sealed class DbObjectList(CancellationTokenSource cancellationToken)
 			if (!t.IsSystemObject) {
 				UpdateCounters();
 				ThreadsafeWrite.Write($"Enumerating trigger {t.Name}");
-				Add(t, null, t.Name, "TRIG");
+				Add(t, null, t.Name, ObjectType.Trigger);
 			}
 		}
 	}
@@ -127,7 +128,7 @@ internal sealed class DbObjectList(CancellationTokenSource cancellationToken)
 			if (!s.IsSystemObject) {
 				UpdateCounters();
 				ThreadsafeWrite.Write($"Enumerating schema {s.Name}");
-				Add(s, null, s.Name, "SCH", Shared.ScriptOptionsMinimal);
+				Add(s, null, s.Name, ObjectType.Schema, Shared.ScriptOptionsMinimal);
 			}
 		}
 	}
@@ -140,7 +141,7 @@ internal sealed class DbObjectList(CancellationTokenSource cancellationToken)
 
 			UpdateCounters();
 			ThreadsafeWrite.Write($"Enumerating uddt {t.Name}");
-			Add(t, t.Schema, t.Name, "UDDT");
+			Add(t, t.Schema, t.Name, ObjectType.UserDefinedDataType);
 		}
 	}
 
@@ -152,7 +153,7 @@ internal sealed class DbObjectList(CancellationTokenSource cancellationToken)
 
 			UpdateCounters();
 			ThreadsafeWrite.Write($"Enumerating udt {t.Name}");
-			Add(t, t.Schema, t.Name, "TYPE");
+			Add(t, t.Schema, t.Name, ObjectType.UserDefinedType);
 		}
 	}
 
@@ -163,7 +164,7 @@ internal sealed class DbObjectList(CancellationTokenSource cancellationToken)
 
 			UpdateCounters();
 			ThreadsafeWrite.Write($"Enumerating sequence {s.Name}");
-			Add(s, s.Schema, s.Name, "SEQ");
+			Add(s, s.Schema, s.Name, ObjectType.Sequence);
 		}
 	}
 
@@ -174,7 +175,7 @@ internal sealed class DbObjectList(CancellationTokenSource cancellationToken)
 
 			UpdateCounters();
 			ThreadsafeWrite.Write($"Enumerating synonym {s.Name}");
-			Add(s, s.Schema, s.Name, "SYNO");
+			Add(s, s.Schema, s.Name, ObjectType.Synonym);
 		}
 	}
 }

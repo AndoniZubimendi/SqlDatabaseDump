@@ -3,8 +3,6 @@
 using System;
 using PicoArgs_dotnet;
 
-// --instance (localdb)\MSSQLLocalDB --db DogTest --dir c:\dev\1
-
 internal static class Program
 {
 	private const int DefaultMaxParallel = 8;
@@ -14,21 +12,25 @@ internal static class Program
 		AppDomain.CurrentDomain.UnhandledException += App_UnhandledException;
 
 		var ver = GitVersion.VersionInfo.Get();
-		Console.WriteLine($"SqlDatabaseDump.exe {ver.GetVersionHash(12)}");
+		Console.WriteLine($"SqlDatabaseDump {ver.GetVersionHash(12)}");
 
 		var config = BuildConfig(args);
 
-		Console.WriteLine($"Dumping '{config.DatabaseName}' from '{config.InstanceName}' into '{config.OutputDirectory}'");
+		Console.WriteLine(
+			$"Dumping '{config.DatabaseName}' from '{config.InstanceName}' into '{config.OutputDirectory}'");
 		if (config.SingleThread) {
 			Console.WriteLine("Single thread processing");
 		}
+
 		if (config.ReplaceExistingFiles) {
 			Console.WriteLine("Replacing existing files");
 		}
+
 		if (config.ExtendedProperties) {
 			Console.WriteLine("Including extended properties");
 			Shared.WithExtendedProperties();
 		}
+
 		if (config.WithDependencies) {
 			Console.WriteLine("Including dependencies");
 			Shared.WithDependencies();
@@ -54,11 +56,13 @@ internal static class Program
 		stopwatch.Stop();
 		var seconds = Convert.ToDouble(stopwatch.ElapsedMilliseconds) / 1000.0;
 
-		Console.WriteLine($"Items found: {Shared.MaxCounter.Value}, files written: {Shared.WrittenCounter.Value}, errors: {Shared.ErrorObjects.Count}, remaining: {Shared.QueueCounter.Value}");
+		Console.WriteLine(
+			$"Items found: {Shared.MaxCounter.Value}, files written: {Shared.WrittenCounter.Value}, errors: {Shared.ErrorObjects.Count}, remaining: {Shared.QueueCounter.Value}");
 		Console.WriteLine($"Execution Time: {seconds:f1} secs");
 	}
 
-	private static void SequentialProcess(IEnumerable<Scriptable> types, Config config, CancellationTokenSource cancellationToken)
+	private static void SequentialProcess(IEnumerable<Scriptable> types, Config config,
+		CancellationTokenSource cancellationToken)
 	{
 		foreach (var type in types) {
 			Console.WriteLine($"Starting {type}...");
@@ -67,17 +71,21 @@ internal static class Program
 		}
 	}
 
-	private static void ParallelProcess(IEnumerable<Scriptable> types, Config config, CancellationTokenSource cancellationToken)
+	private static void ParallelProcess(IEnumerable<Scriptable> types, Config config,
+		CancellationTokenSource cancellationToken)
 	{
 		try {
-			_ = Parallel.ForEach(types, new ParallelOptions { CancellationToken = cancellationToken.Token, MaxDegreeOfParallelism = config.MaxParallel }, type => {
-				ThreadsafeWrite.Write($"Starting {type}...");
+			_ = Parallel.ForEach(types,
+				new ParallelOptions {
+					CancellationToken = cancellationToken.Token, MaxDegreeOfParallelism = config.MaxParallel
+				}, type => {
+					ThreadsafeWrite.Write($"Starting {type}...");
 
-				var dumper = new DumpDb(config, type, cancellationToken);
-				dumper.Run();
+					var dumper = new DumpDb(config, type, cancellationToken);
+					dumper.Run();
 
-				ThreadsafeWrite.Write($"Finished {type}.");
-			});
+					ThreadsafeWrite.Write($"Finished {type}.");
+				});
 		}
 		catch (AggregateException ae) {
 			// handle exceptions from Parallel.ForEach, but ignore OperationCancelledException, they are just a side-effect
@@ -126,6 +134,10 @@ internal static class Program
 
 		// parse command line parameters
 		var instance = pico.GetParamOpt("-i", "--instance") ?? Environment.GetEnvironmentVariable("DB_INSTANCE");
+
+		var login = pico.GetParamOpt("-u", "--username") ?? Environment.GetEnvironmentVariable("DB_USERNAME");
+		var password = pico.GetParamOpt("-p", "--password") ?? Environment.GetEnvironmentVariable("DB_PASSWORD");
+
 		var database = pico.GetParamOpt("-d", "--database") ?? Environment.GetEnvironmentVariable("DB_DATABASE");
 		var dir = pico.GetParamOpt("-o", "--dir") ?? Environment.GetEnvironmentVariable("DB_DIR");
 		var maxParallel = ParseOrDefault(pico.GetParamOpt("-p", "--parallel"), DefaultMaxParallel);
@@ -141,14 +153,16 @@ internal static class Program
 		pico.Finished();
 
 		// ensure required parameters are present
-		if (string.IsNullOrWhiteSpace(instance) || string.IsNullOrWhiteSpace(database) || string.IsNullOrWhiteSpace(dir) || maxParallel < 1 || maxParallel > 16) {
+		if (string.IsNullOrWhiteSpace(instance) || string.IsNullOrWhiteSpace(database) ||
+		    string.IsNullOrWhiteSpace(login) || string.IsNullOrWhiteSpace(password) ||
+		    string.IsNullOrWhiteSpace(dir) || maxParallel < 1 || maxParallel > 16) {
 			Console.WriteLine(CommandLineMessage);
 			Environment.Exit(1);
 		}
 
 		dir = DumpDb.EnsurePathExists(dir);
 
-		return new Config(instance, database, dir, maxParallel,
+		return new Config(instance, login, password, database, dir, maxParallel,
 			singleThread, replace, skipErrors, extendedProperties || allExtras, withDependencies || allExtras);
 	}
 
@@ -174,25 +188,28 @@ internal static class Program
 		wr.Close();
 	}
 
-	private static int ParseOrDefault(string? value, int defaultValue) => int.TryParse(value, out var result) ? result : defaultValue;
+	private static int ParseOrDefault(string? value, int defaultValue) =>
+		int.TryParse(value, out var result) ? result : defaultValue;
 
 	private const string CommandLineMessage = """
-		Usage: SqlDatabaseDump.exe --instance <instance> --database <db> --dir <dir>
+	                                          Usage: SqlDatabaseDump.exe --instance <instance> --database <db> --dir <dir>
 
-		Required:
-		  -i, --instance <instance>  SQL Server instance to connect to  (or DB_INSTANCE environment variable)
-		  -d, --database <db>        Database to process                (or DB_DATABASE environment variable)
-		  -o, --dir <dir>            Output directory                   (or DB_DIR environment variable)
+	                                          Required:
+	                                            -i, --instance <instance>  SQL Server instance to connect to  (or DB_INSTANCE environment variable)
+	                                            -u, --username <login>     Username to login                  (or DB_USERNAME environment variable)
+	                                            -p, --password <pass>      Password for login                 (or DB_PASSWORD environment variable)
+	                                            -d, --database <db>        Database to process                (or DB_DATABASE environment variable)
+	                                            -o, --dir <dir>            Output directory                   (or DB_DIR environment variable)
 
-		Options:
-		  -e, --extended-properties  Include extended properties
-		  -w, --with-dependencies    Include dependencies
-		  -a, --all                  Include all extras (extended properties and dependencies)
+	                                          Options:
+	                                            -e, --extended-properties  Include extended properties
+	                                            -w, --with-dependencies    Include dependencies
+	                                            -a, --all                  Include all extras (extended properties and dependencies)
 
-		  -r, --replace              Replace existing files (default is to fail if file exists)
-		  -s, --single-thread        Single thread processing
-		  -p, --parallel <n>         Maximum parallel tasks 1..16 (default is 8)
-		  -k, --skip-errors          Skip errors without writing to file
-		  -h, --help, -?             Help information
-		""";
+	                                            -r, --replace              Replace existing files (default is to fail if file exists)
+	                                            -s, --single-thread        Single thread processing
+	                                            -p, --parallel <n>         Maximum parallel tasks 1..16 (default is 8)
+	                                            -k, --skip-errors          Skip errors without writing to file
+	                                            -h, --help, -?             Help information
+	                                          """;
 }

@@ -1,5 +1,4 @@
-﻿
-namespace SqlDatabaseDump;
+﻿namespace SqlDatabaseDump;
 
 /// <summary>
 /// Exception thrown when a file already exists

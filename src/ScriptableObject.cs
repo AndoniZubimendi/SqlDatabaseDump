@@ -1,6 +1,7 @@
 ﻿namespace SqlDatabaseDump;
 
 using System.Collections.Specialized;
+using System.Text.RegularExpressions;
 using Microsoft.SqlServer.Management.Smo;
 
 /// <summary>
@@ -14,10 +15,12 @@ internal enum Scriptable
 	Views,
 	StoredProcedures,
 	UserDefinedFunctions,
+
 	// then smaller items like schemas and roles
 	Schemas,
 	Roles,
 	DatabaseTriggers,
+
 	// then the last bits, frequently empty
 	Sequences,
 	UserDefinedDataTypes,
@@ -30,7 +33,7 @@ internal enum Scriptable
 /// A wrapper class for database objects to allow polymorphic processing
 /// </summary>
 [System.Diagnostics.DebuggerDisplay("{FullName,nq}")]
-internal sealed class ScriptableObject
+internal sealed partial class ScriptableObject
 {
 	private IScriptable Scriptable { get; }
 
@@ -47,7 +50,9 @@ internal sealed class ScriptableObject
 	/// <summary>
 	/// Override the full name, or [schema.]name.ext
 	/// </summary>
-	public string FullName => OverrideFilename ?? $"{Schema}.{Name}.{Ext}".TrimStart('.');
+	public string FullName => OverrideFilename ?? $"{Ext}/" + $"{Schema}.{Name}.sql".TrimStart('.');
+
+	public string DirName => (OverrideFilename != null) ? "" : $"{Ext}".TrimStart('.');
 
 	public override string ToString() => FullName;
 
@@ -57,7 +62,8 @@ internal sealed class ScriptableObject
 	public ScriptableObject(IScriptable script, string? schema, string name, string extension, ScriptingOptions options)
 	{
 		Scriptable = script;
-		Schema = schema;
+		this.Schema = schema != null ? schema.StartsWith("dbo") ? schema.Substring(3) : schema : null;
+
 		Name = name.Replace('\\', '-');
 		Ext = extension;
 		Options = options;
@@ -84,11 +90,13 @@ internal sealed class ScriptableObject
 		var main = Scriptable.Script(Options);
 
 		foreach (var s in main) {
-			if (!string.IsNullOrWhiteSpace(s)) {
-				yield return s;
-				yield return "GO";
-				yield return string.Empty;
+			if (string.IsNullOrWhiteSpace(s)) {
+				continue;
 			}
+
+			yield return s;
+			yield return "GO";
+			yield return string.Empty;
 		}
 	}
 }
