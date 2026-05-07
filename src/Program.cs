@@ -166,6 +166,7 @@ internal static class Program
 		dir = DumpDb.EnsurePathExists(dir);
 
 		List<string> referenceTables = []; //pico.GetValues<string>("-t", "--reference-tables");
+
 		return new Config(instance, login, password, database, dir, maxParallel,
 			singleThread, replace, skipErrors, extendedProperties || allExtras, withDependencies || allExtras,
 			referenceTables

@@ -12,4 +12,8 @@ internal sealed record class Config(
 	bool SkipErrors,
 	bool ExtendedProperties,
 	bool WithDependencies,
-	List<string> ReferenceTables);
+	List<string> ReferenceTables)
+{
+	public bool Equals(Config? other) => false; // TODO
+	public override int GetHashCode() => 0; // TODO
+}

@@ -8,9 +8,9 @@ internal static class ReferenceTableDumper
 	{
 		List<string> tableNames = config.ReferenceTables;
 
-		if (tableNames.Count == 0) {
-			return;
-		}
+	//	if (tableNames.Count == 0) {
+	//		return;
+	//	}
 
 		var theServer = new Server(config.InstanceName);
 
@@ -43,7 +43,9 @@ internal static class ReferenceTableDumper
 
 		foreach (string tableName in tableNames) {
 			Table tbl = myDB.Tables[tableName];
-			if (tbl == null) continue;
+			if (tbl == null) {
+				continue;
+			}
 
 			// CRITICAL: Use tbl.EnumScript instead of scripter.Script
 			var scriptLines = tbl.EnumScript(options);

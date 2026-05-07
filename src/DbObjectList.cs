@@ -39,7 +39,7 @@ internal sealed class DbObjectList(CancellationTokenSource cancellationToken)
 			if (!tab.IsSystemObject) {
 				UpdateCounters();
 				ThreadsafeWrite.Write($"Enumerating table {tab.Name}");
-				Add(tab, tab.Schema, ObjectType.Table, ObjectType.Table, Shared.ScriptOptionsFull);
+				Add(tab, tab.Schema, tab.Name, ObjectType.Table, Shared.ScriptOptionsFull);
 			}
 		}
 	}
