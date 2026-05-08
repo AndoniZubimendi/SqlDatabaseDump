@@ -8,28 +8,30 @@ internal static class ReferenceTableDumper
 	{
 		List<string> tableNames = config.ReferenceTables;
 
-	//	if (tableNames.Count == 0) {
-	//		return;
-	//	}
+		if (tableNames.Count == 0) {
+			return;
+		}
 
-		var theServer = new Server(config.InstanceName);
-
-		theServer.ConnectionContext.LoginSecure = false; // False = SQL Authentication
-		theServer.ConnectionContext.Login = config.Login;
-		theServer.ConnectionContext.Password = config.Password;
+		var theServer = new Server(config.InstanceName) {
+			ConnectionContext = {
+				LoginSecure = false, // False = SQL Authentication
+				Login = config.Login,
+				Password = config.Password
+			}
+		};
 
 		theServer.ConnectionContext.Connect();
 
-		var myDB = theServer.Databases[config.DatabaseName];
+		var myDb = theServer.Databases[config.DatabaseName];
 
-		if (myDB == null) {
+		if (myDb == null) {
 			throw new InvalidOperationException(
 				$"Database '{config.DatabaseName}' not found on '{config.InstanceName}'");
 		}
 
 
 		// Define the scripting options correctly
-		ScriptingOptions options = new ScriptingOptions {
+		var options = new ScriptingOptions {
 			ScriptData = true, // Enable data generation
 			ScriptSchema = false, // Set to false if you ONLY want INSERTs
 			IncludeHeaders = true,
@@ -41,8 +43,13 @@ internal static class ReferenceTableDumper
 //		scripter.Options.ScriptSchema = false; // Only data, no CREATE TABLE
 //		scripter.Options.IncludeHeaders = true;
 
-		foreach (string tableName in tableNames) {
-			Table tbl = myDB.Tables[tableName];
+		var dirname = Path.Combine(config.OutputDirectory, "references");
+		if (!Directory.Exists(dirname)) {
+			_ = Directory.CreateDirectory(dirname);
+		}
+
+		foreach (var tableName in tableNames) {
+			var tbl = myDb.Tables[tableName];
 			if (tbl == null) {
 				continue;
 			}
@@ -50,7 +57,8 @@ internal static class ReferenceTableDumper
 			// CRITICAL: Use tbl.EnumScript instead of scripter.Script
 			var scriptLines = tbl.EnumScript(options);
 
-			string filePath = Path.Combine(config.OutputDirectory, "references", $"{tableName}_data.sql");
+			var filePath = Path.Combine(dirname, $"{tableName}.sql");
+
 			File.WriteAllLines(filePath, scriptLines);
 			Console.WriteLine($"Exported {tableName} to {filePath}");
 		}

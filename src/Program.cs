@@ -140,6 +140,7 @@ internal static class Program
 
 		var login = pico.GetParamOpt("-u", "--username") ?? Environment.GetEnvironmentVariable("DB_USERNAME");
 		var password = pico.GetParamOpt("-p", "--password") ?? Environment.GetEnvironmentVariable("DB_PASSWORD");
+		var referenceTablesStringList = pico.GetParamOpt("-t", "--reference-tables")?? Environment.GetEnvironmentVariable("DB_REFTABLES");
 
 		var database = pico.GetParamOpt("-d", "--database") ?? Environment.GetEnvironmentVariable("DB_DATABASE");
 		var dir = pico.GetParamOpt("-o", "--dir") ?? Environment.GetEnvironmentVariable("DB_DIR");
@@ -155,6 +156,10 @@ internal static class Program
 
 		pico.Finished();
 
+		if (string.IsNullOrWhiteSpace(referenceTablesStringList)) {
+			referenceTablesStringList = "";
+		}
+
 		// ensure required parameters are present
 		if (string.IsNullOrWhiteSpace(instance) || string.IsNullOrWhiteSpace(database) ||
 		    string.IsNullOrWhiteSpace(login) || string.IsNullOrWhiteSpace(password) ||
@@ -162,10 +167,10 @@ internal static class Program
 			Console.WriteLine(CommandLineMessage);
 			Environment.Exit(1);
 		}
+		var referenceTables = referenceTablesStringList.Split(",").ToList();
 
 		dir = DumpDb.EnsurePathExists(dir);
 
-		List<string> referenceTables = []; //pico.GetValues<string>("-t", "--reference-tables");
 
 		return new Config(instance, login, password, database, dir, maxParallel,
 			singleThread, replace, skipErrors, extendedProperties || allExtras, withDependencies || allExtras,
@@ -209,6 +214,7 @@ internal static class Program
 	                                            -o, --dir <dir>            Output directory                   (or DB_DIR environment variable)
 
 	                                          Options:
+	                                            -r, --reference-tables <table1,table2>  Reference tables to include (comma separated)
 	                                            -e, --extended-properties  Include extended properties
 	                                            -w, --with-dependencies    Include dependencies
 	                                            -a, --all                  Include all extras (extended properties and dependencies)

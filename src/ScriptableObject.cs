@@ -65,7 +65,7 @@ internal sealed partial class ScriptableObject
 		this.Schema = schema != null ? schema.StartsWith("dbo") ? schema.Substring(3) : schema : null;
 
 		Name = name.Replace('\\', '-');
-		Ext = extension;
+		Ext = ObjectType.directoryName(extension);
 		Options = options;
 	}
 
