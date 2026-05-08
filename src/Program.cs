@@ -2,6 +2,8 @@
 
 using System;
 using PicoArgs_dotnet;
+using IniParser;
+using IniParser.Model;
 
 internal static class Program
 {
@@ -40,7 +42,7 @@ internal static class Program
 
 		using var cancellationToken = new CancellationTokenSource();
 		var types = Enum.GetValues<Scriptable>();
-		
+
 		if (config.SingleThread || config.MaxParallel == 1) {
 			// run in sequence
 			SequentialProcess(types, config, cancellationToken);
@@ -61,7 +63,6 @@ internal static class Program
 		Console.WriteLine(
 			$"Items found: {Shared.MaxCounter.Value}, files written: {Shared.WrittenCounter.Value}, errors: {Shared.ErrorObjects.Count}, remaining: {Shared.QueueCounter.Value}");
 		Console.WriteLine($"Execution Time: {seconds:f1} secs");
-		
 	}
 
 	private static void SequentialProcess(IEnumerable<Scriptable> types, Config config,
@@ -136,11 +137,19 @@ internal static class Program
 		}
 
 		// parse command line parameters
-		var instance = pico.GetParamOpt("-i", "--instance") ?? Environment.GetEnvironmentVariable("DB_INSTANCE");
+		var config_file = pico.GetParamOpt("-c", "--config");
+
+		if (!string.IsNullOrWhiteSpace(config_file)) {
+			var config = Load(config_file);
+			return config;
+		}
+
+		var server = pico.GetParamOpt("-s", "--server") ?? Environment.GetEnvironmentVariable("DB_SERVER");
 
 		var login = pico.GetParamOpt("-u", "--username") ?? Environment.GetEnvironmentVariable("DB_USERNAME");
 		var password = pico.GetParamOpt("-p", "--password") ?? Environment.GetEnvironmentVariable("DB_PASSWORD");
-		var referenceTablesStringList = pico.GetParamOpt("-t", "--reference-tables")?? Environment.GetEnvironmentVariable("DB_REFTABLES");
+		var referenceTablesStringList = pico.GetParamOpt("-t", "--reference-tables") ??
+		                                Environment.GetEnvironmentVariable("DB_REFTABLES");
 
 		var database = pico.GetParamOpt("-d", "--database") ?? Environment.GetEnvironmentVariable("DB_DATABASE");
 		var dir = pico.GetParamOpt("-o", "--dir") ?? Environment.GetEnvironmentVariable("DB_DIR");
@@ -160,19 +169,66 @@ internal static class Program
 			referenceTablesStringList = "";
 		}
 
+
 		// ensure required parameters are present
-		if (string.IsNullOrWhiteSpace(instance) || string.IsNullOrWhiteSpace(database) ||
+		if (string.IsNullOrWhiteSpace(server) || string.IsNullOrWhiteSpace(database) ||
 		    string.IsNullOrWhiteSpace(login) || string.IsNullOrWhiteSpace(password) ||
 		    string.IsNullOrWhiteSpace(dir) || maxParallel < 1 || maxParallel > 16) {
 			Console.WriteLine(CommandLineMessage);
 			Environment.Exit(1);
 		}
+
 		var referenceTables = referenceTablesStringList.Split(",").ToList();
 
 		dir = DumpDb.EnsurePathExists(dir);
 
+		return new Config(server, login, password, database, dir, maxParallel,
+			singleThread, replace, skipErrors, extendedProperties || allExtras, withDependencies || allExtras,
+			referenceTables
+		);
+	}
 
-		return new Config(instance, login, password, database, dir, maxParallel,
+	private static Config Load(string configFile)
+	{ 
+		
+		Console.WriteLine($"Leyendo {configFile}");
+
+		var parser = new IniDataParser();
+
+		string fileContent = File.ReadAllText(configFile);
+		IniData data = parser.Parse(fileContent);
+		
+		var server = data.Global["Server"];
+		var login = data.Global["Login"];
+		var password = data.Global["Password"];
+		var database = data.Global["Database"];
+		var dir = data.Global["OutputDirectory"];
+		var referenceTablesStringList = data.Global["ReferenceTables"] ?? "";
+		
+		var maxParallel = data.Global["MaxParallel"] != null ? int.Parse(data.Global["MaxParallel"]) : DefaultMaxParallel;
+		var singleThread = data.Global["SingleThread"] != null && bool.Parse(data.Global["SingleThread"]);
+		var replace = data.Global["ReplaceExistingFiles"] != null && bool.Parse(data.Global["ReplaceExistingFiles"]);
+		var skipErrors = data.Global["SkipErrors"] != null && bool.Parse(data.Global["SkipErrors"]);
+		
+		var extendedProperties = data.Global["ExtendedProperties"] != null&& bool.Parse(data.Global["ExtendedProperties"]);
+		var withDependencies = data.Global["WithDependencies"] != null && bool.Parse(data.Global["WithDependencies"]);
+		var allExtras = data.Global["AllExtras"] != null && bool.Parse(data.Global["AllExtras"]);
+
+		Console.WriteLine($"Configuración cargada para {server}/{database} en {dir}");
+
+		// ensure required parameters are present
+		if (string.IsNullOrWhiteSpace(server) || string.IsNullOrWhiteSpace(database) ||
+		    string.IsNullOrWhiteSpace(login) || string.IsNullOrWhiteSpace(password) ||
+		    string.IsNullOrWhiteSpace(dir) || maxParallel < 1 || maxParallel > 16) {
+			Console.WriteLine($"Error reading config file {configFile}");
+			Environment.Exit(1);
+		}
+
+		var referenceTables = referenceTablesStringList.Split(",").ToList();
+		dir = DumpDb.EnsurePathExists(dir);
+
+
+		return new Config(server, login, password, database, dir, maxParallel,
 			singleThread, replace, skipErrors, extendedProperties || allExtras, withDependencies || allExtras,
 			referenceTables
 		);
@@ -204,10 +260,12 @@ internal static class Program
 		int.TryParse(value, out var result) ? result : defaultValue;
 
 	private const string CommandLineMessage = """
-	                                          Usage: SqlDatabaseDump.exe --instance <instance> --database <db> --dir <dir>
+	                                          Usage: SqlDatabaseDump.exe --server <server> -u <user> -p <password> --database <db> --dir <dir>
 
 	                                          Required:
-	                                            -i, --instance <instance>  SQL Server instance to connect to  (or DB_INSTANCE environment variable)
+	                                            -c  --config <ini>         Config file
+	                                          Or:
+	                                            -s, --server <server>      SQL Server to connect to           (or DB_SERVER environment variable)
 	                                            -u, --username <login>     Username to login                  (or DB_USERNAME environment variable)
 	                                            -p, --password <pass>      Password for login                 (or DB_PASSWORD environment variable)
 	                                            -d, --database <db>        Database to process                (or DB_DATABASE environment variable)
@@ -215,14 +273,14 @@ internal static class Program
 
 	                                          Options:
 	                                            -r, --reference-tables <table1,table2>  Reference tables to include (comma separated)
-	                                            -e, --extended-properties  Include extended properties
-	                                            -w, --with-dependencies    Include dependencies
-	                                            -a, --all                  Include all extras (extended properties and dependencies)
+	                                            -e, --extended-properties               Include extended properties
+	                                            -w, --with-dependencies                 Include dependencies
+	                                            -a, --all                               Include all extras (extended properties and dependencies)
 
-	                                            -r, --replace              Replace existing files (default is to fail if file exists)
-	                                            -s, --single-thread        Single thread processing
-	                                            -p, --parallel <n>         Maximum parallel tasks 1..16 (default is 8)
-	                                            -k, --skip-errors          Skip errors without writing to file
-	                                            -h, --help, -?             Help information
+	                                            -r, --replace                           Replace existing files (default is to fail if file exists)
+	                                            -s, --single-thread                     Single thread processing
+	                                            -p, --parallel <n>                      Maximum parallel tasks 1..16 (default is 8)
+	                                            -k, --skip-errors                       Skip errors without writing to file
+	                                            -h, --help, -?                          Help information
 	                                          """;
 }
